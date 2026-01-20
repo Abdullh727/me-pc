@@ -11,16 +11,21 @@ jobs:
     steps:
       - name: Configure Core RDP Settings
         run: |
+          # تمكين سطح المكتب البعيد وإعدادات الأمان
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
+
+          # فتح المنفذ في جدار الحماية
           netsh advfirewall firewall delete rule name="RDP-Tailscale"
           netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
+
           Restart-Service -Name TermService -Force
 
-      - name: Create RDP User with Secure Password
+      - name: Create RDP User
         run: |
-          $password = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 12 | % {[char]$_})
+          # كلمة المرور ثابتة لسهولة الدخول
+          $password = "GitHubRDP@2026"
           $securePass = ConvertTo-SecureString $password -AsPlainText -Force
           New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member "RDP"
@@ -31,31 +36,37 @@ jobs:
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi"
           $installerPath = "$env:TEMP\tailscale.msi"
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
+          
+          # تثبيت صامت بدون مشاكل في المسارات
           Start-Process msiexec.exe -ArgumentList "/i", $installerPath, "/quiet", "/norestart" -Wait
           Remove-Item $installerPath -Force
 
       - name: Establish Tailscale Connection
         run: |
-          # --- ضع المفتاح الجديد الذي يبدأ بـ tskey-auth هنا ---
-          $authKey = "tskey-auth-kJLLxsJG2N11CNTRL-b82V46LjUCWuBgsnp4WrCWQuAEm8gtGxe"
+          # --- انتبه هنا: ضع مفتاحك الجديد الذي يبدأ بـ tskey-auth ---
+          $MY_AUTH_KEY = "tskey-auth-kV9NDFxrM111CNTRL-TcaKS1E63FfhFbkqgFdPFfN2tYD7RDxtJ"
           
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$authKey --hostname=gh-runner-$env:GITHUB_RUN_ID
+          Write-Host "Connecting to Tailscale..."
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$MY_AUTH_KEY --hostname=gh-runner --accept-routes
           
-          $tsIP = $null
-          $retries = 0
-          while (-not $tsIP -and $retries -lt 10) {
-              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
-              if ($tsIP) { $tsIP = $tsIP.Trim() }
-              Start-Sleep -Seconds 5
-              $retries++
-          }
+          # انتظار بسيط لضمان سحب الآي بي
+          Start-Sleep -Seconds 10
+          $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
           
       - name: Maintain Connection
         run: |
-          Write-Host "`n=== RDP DETAILS ==="
-          Write-Host "IP: $env:TAILSCALE_IP"
-          Write-Host "User: RDP"
-          Write-Host "Pass: $env:RDP_PASS"
-          Write-Host "====================`n"
-          while ($true) { Start-Sleep -Seconds 300 }
+          Write-Host "`n"
+          Write-Host "==============================================" -ForegroundColor Cyan
+          Write-Host "   RDP CONNECTION IS READY!" -ForegroundColor Green
+          Write-Host "==============================================" -ForegroundColor Cyan
+          Write-Host "IP Address: $env:TAILSCALE_IP" -ForegroundColor Yellow
+          Write-Host "Username  : RDP" -ForegroundColor Yellow
+          Write-Host "Password  : $env:RDP_PASS" -ForegroundColor Yellow
+          Write-Host "==============================================" -ForegroundColor Cyan
+          Write-Host "Keep this tab open. Connect using Remote Desktop App."
+          
+          while ($true) {
+              Write-Host "[$(Get-Date)] Session is active..."
+              Start-Sleep -Seconds 300
+          }
