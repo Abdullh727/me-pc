@@ -11,18 +11,14 @@ jobs:
     steps:
       - name: Configure Core RDP Settings
         run: |
-          # Enable Remote Desktop and disable Network Level Authentication
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-                           -Name "fDenyTSConnections" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                           -Name "UserAuthentication" -Value 0 -Force
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
-                           -Name "SecurityLayer" -Value 0 -Force
+          # تمكين سطح المكتب البعيد وإعدادات الأمان
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
 
-          # Remove any existing rule and add a new one for RDP
+          # فتح المنفذ في جدار الحماية
           netsh advfirewall firewall delete rule name="RDP-Tailscale"
-          netsh advfirewall firewall add rule name="RDP-Tailscale" `
-            dir=in action=allow protocol=TCP localport=3389
+          netsh advfirewall firewall add rule name="RDP-Tailscale" dir=in action=allow protocol=TCP localport=3389
 
           Restart-Service -Name TermService -Force
 
@@ -48,30 +44,21 @@ jobs:
           Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
           
           echo "RDP_PASS=$password" >> $env:GITHUB_ENV
-          
-          if (-not (Get-LocalUser -Name "RDP")) {
-              Write-Error "User creation failed"
-              exit 1
-          }
 
       - name: Install Tailscale
         run: |
           $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi"
           $installerPath = "$env:TEMP\tailscale.msi"
-          
-          Write-Host "Downloading Tailscale..."
           Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-          
-          Write-Host "Installing Tailscale..."
-          # تم إصلاح هذا السطر ليتوافق مع نظام صلاحيات GitHub
           Start-Process msiexec.exe -ArgumentList "/i", $installerPath, "/quiet", "/norestart" -Wait
-          
           Remove-Item $installerPath -Force
 
       - name: Establish Tailscale Connection
         run: |
-          # تأكد من وضع المفتاح في Secrets باسم TAILSCALE_AUTH_KEY
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
+          # استبدل النص بالأسفل بمفتاحك الخاص (اتركه داخل علامات التنصيص)
+          $authKey = "tskey-auth-kamrAzC7bR11CNTRL-G82Gtm7oNPJYUtP6bgwePJgqr6fnYhnN"
+          
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$authKey --hostname=gh-runner-$env:GITHUB_RUN_ID
           
           $tsIP = $null
           $retries = 0
@@ -81,26 +68,19 @@ jobs:
               Start-Sleep -Seconds 5
               $retries++
           }
-          
-          if (-not $tsIP) {
-              Write-Error "Tailscale IP not assigned. Check your Auth Key."
-              exit 1
-          }
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
           
       - name: Maintain Connection
         run: |
-          Write-Host "`n"
-          Write-Host "**********************************************" -ForegroundColor Cyan
-          Write-Host "   RDP CONNECTION DETAILS" -ForegroundColor Cyan
-          Write-Host "**********************************************" -ForegroundColor Cyan
-          Write-Host "IP Address: $env:TAILSCALE_IP" -ForegroundColor Green
-          Write-Host "Username  : RDP" -ForegroundColor Green
-          Write-Host "Password  : $env:RDP_PASS" -ForegroundColor Green
-          Write-Host "**********************************************" -ForegroundColor Cyan
-          Write-Host "`n"
+          Write-Host "`n**********************************************"
+          Write-Host "   RDP CONNECTION DETAILS"
+          Write-Host "**********************************************"
+          Write-Host "IP Address: $env:TAILSCALE_IP"
+          Write-Host "Username  : RDP"
+          Write-Host "Password  : $env:RDP_PASS"
+          Write-Host "**********************************************`n"
           
           while ($true) {
-              Write-Host "[$(Get-Date)] Session Active. Connect via Remote Desktop App."
+              Write-Host "[$(Get-Date)] Session Active..."
               Start-Sleep -Seconds 300
           }
