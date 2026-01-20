@@ -56,7 +56,7 @@ jobs:
       - name: Establish Tailscale Connection
         run: |
           # استبدل النص بالأسفل بمفتاحك الخاص (اتركه داخل علامات التنصيص)
-          $authKey = "tskey-auth-kamrAzC7bR11CNTRL-G82Gtm7oNPJYUtP6bgwePJgqr6fnYhnN"
+          $authKey = "tskey-auth-ktCYoDUgo621CNTRL-CJiDUqDcxV7noHrqw3jdV7kjrpWrFPAAN"
           
           & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$authKey --hostname=gh-runner-$env:GITHUB_RUN_ID
           
